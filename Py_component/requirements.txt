@@ -1,0 +1,9 @@
+fastapi>=0.100.0
+uvicorn[standard]>=0.20.0
+python-multipart>=0.0.5 # Для обработки загрузки файлов (хотя мы используем base64)
+opencv-python-headless>=4.7.0 # Библиотека для обработки изображений (без GUI)
+numpy==1.26.4
+scipy==1.14.1
+pydantic>=2.0.0
+scikit-image==0.22.0
+python-dotenv>=0.20.0 # Для загрузки .env (опционально)

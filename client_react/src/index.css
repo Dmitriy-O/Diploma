@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Ваши остальные стили могут идти ниже */
+body {
+  /* Пример базового стиля, если нужно */
+   font-family: 'Poppins', sans-serif; /* Применяем Poppins по умолчанию */
+   /* background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); */ /* Фон лучше задать в App.jsx */
+}
+/* Убедимся, что .hidden работает надежно */
+.hidden {
+    display: none !important;
+}

@@ -11,3 +11,7 @@ class UpscaleResponse(BaseModel):
     upscaled_shape: tuple[int, int]
     algorithm: str
     message: str
+
+class UpscaleAllResponse(BaseModel):
+    original_shape: tuple[int, int]
+    results: dict[str, dict]

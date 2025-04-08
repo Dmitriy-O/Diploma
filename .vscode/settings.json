@@ -1,0 +1,6 @@
+{
+	"python.analysis.extraPaths": [
+		"./Py_component/utils",
+		"./Py_component/core"
+	]
+}

@@ -1,12 +1,22 @@
-fastapi>=0.100.0
-uvicorn[standard]>=0.20.0
-python-multipart>=0.0.5
-opencv-python-headless>=4.7.0
-numpy>=1.26.4
-pydantic>=2.0.0
-celery>=5.3.6
-importlib-metadata==4.12.0
-redis>=5.0.1
-scikit-image>=0.22.0
-python-dotenv>=0.20.0
-gevent>=23.0.0
+# Web framework и сервер
+fastapi>=0.95.0
+uvicorn>=0.20.0
+
+# Celery для асинхронных задач
+celery>=5.2.7
+redis>=4.5.1  # Клиент для Redis (брокер и backend)
+
+# Обработка изображений
+opencv-python-headless>=4.7.0  # cv2
+numpy>=1.23.5
+scikit-image>=0.19.3  # для psnr и ssim
+
+# Логирование и утилиты
+pydantic>=1.10.7  # Для моделей FastAPI
+matplotlib>=3.7.1  # Для построения гистограмм
+
+# Научные вычисления (для биквадратичной интерполяции)
+scipy>=1.10.1
+
+# Дополнительно (опционально, если используются)
+python-multipart>=0.0.6  # Для загрузки файлов через FastAPI

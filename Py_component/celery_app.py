@@ -1,4 +1,5 @@
 from celery import Celery
+import time
 import cv2
 import numpy as np
 import base64
@@ -59,10 +60,10 @@ def process_image(image_data: str, scale_factor: float, algorithm: str, is_base6
         logger.error(f"Ошибка обработки: {str(e)}")
         return {"error": str(e)}
 
-@celery_app.task
-def process_all_methods(image_base64: str, scale_factor: float):
+@celery_app.task(bind=True)
+def process_all_methods(self, image_base64: str, scale_factor: float):
     try:
-        task_id = process_all_methods.request.id
+        task_id = self.request.id
         results_dir = os.path.join("static", "results", task_id)
         os.makedirs(results_dir, exist_ok=True)
 
@@ -79,30 +80,24 @@ def process_all_methods(image_base64: str, scale_factor: float):
         target_width = int(original_image.shape[1] * scale_factor)
         target_size = (target_width, target_height)
 
+        # Создаём эталонное изображение с помощью INTER_LANCZOS4
+        reference_image = cv2.resize(original_image, target_size, interpolation=cv2.INTER_LANCZOS4)
+
         results = {}
-        interpolation_configs = {
-            "bilinear": {"downscale": cv2.INTER_AREA, "upscale": cv2.INTER_LINEAR},
-            "bicubic": {"downscale": cv2.INTER_AREA, "upscale": cv2.INTER_CUBIC},
-            "biquadratic": {"downscale": biquadratic_downscale, "upscale": biquadratic_interpolation}
-        }
+        total_methods = len(INTERPOLATION_METHODS)
+        for idx, (method_name, interpolation_func) in enumerate(INTERPOLATION_METHODS.items()):
+            progress = (idx / total_methods) * 100
+            self.update_state(state='PROGRESS', meta={'progress': progress})
+            logger.info(f"Processing {method_name}, progress: {progress:.1f}%")
 
-        for method_name, interpolation_func in INTERPOLATION_METHODS.items():
-            config = interpolation_configs[method_name]
-            downscaled_height = int(original_image.shape[0] / scale_factor)
-            downscaled_width = int(original_image.shape[1] / scale_factor)
-            downscaled_size = (downscaled_width, downscaled_height)
+            start_time = time.time()
 
-            if method_name == "biquadratic":
-                downscaled = config["downscale"](original_image, 1/scale_factor)
-                if downscaled.shape[:2] != (downscaled_height, downscaled_width):
-                    downscaled = cv2.resize(downscaled, downscaled_size, interpolation=cv2.INTER_AREA)
-                reference_image = config["upscale"](downscaled, scale_factor)
-                reference_image = cv2.resize(reference_image, target_size, interpolation=cv2.INTER_CUBIC)
+            if original_image.size > 5_000_000:
+                from image_processing import process_image_in_chunks
+                upscaled_image = process_image_in_chunks(original_image, scale_factor, interpolation_func)
             else:
-                downscaled = cv2.resize(original_image, downscaled_size, interpolation=config["downscale"])
-                reference_image = cv2.resize(downscaled, target_size, interpolation=config["upscale"])
+                upscaled_image = interpolation_func(original_image, scale_factor)
 
-            upscaled_image = interpolation_func(original_image, scale_factor)
             if upscaled_image.shape[:2] != (target_height, target_width):
                 upscaled_image = cv2.resize(upscaled_image, target_size, interpolation=cv2.INTER_CUBIC)
 
@@ -121,14 +116,18 @@ def process_all_methods(image_base64: str, scale_factor: float):
             hist_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
             plt.close()
 
-            _, buffer = cv2.imencode('.png', upscaled_image)
+            _, buffer = cv2.imencode('.png', upscaled_image, [cv2.IMWRITE_PNG_COMPRESSION, 9])
             upscaled_base64 = f"data:image/png;base64,{base64.b64encode(buffer).decode('utf-8')}"
 
-            _, buffer = cv2.imencode('.png', diff_image)
+            _, buffer = cv2.imencode('.png', diff_image, [cv2.IMWRITE_PNG_COMPRESSION, 9])
             diff_base64 = f"data:image/png;base64,{base64.b64encode(buffer).decode('utf-8')}"
 
             psnr_value = psnr(reference_image, upscaled_image, data_range=255)
             ssim_value = ssim(reference_image, upscaled_image, data_range=255, channel_axis=2)
+
+            end_time = time.time()
+            processing_time = end_time - start_time
+            logger.info(f"{method_name} processing time: {processing_time:.2f} sec")
 
             results[method_name] = {
                 "upscaled_image_base64": upscaled_base64,
@@ -136,8 +135,12 @@ def process_all_methods(image_base64: str, scale_factor: float):
                 "hist_base64": f"data:image/png;base64,{hist_base64}",
                 "upscaled_shape": [upscaled_image.shape[1], upscaled_image.shape[0]],
                 "psnr": float(psnr_value) if not np.isinf(psnr_value) else "infinity",
-                "ssim": float(ssim_value)
+                "ssim": float(ssim_value),
+                "processing_time": processing_time
             }
+
+        self.update_state(state='PROGRESS', meta={'progress': 100})
+        logger.info("Processing complete, progress: 100%")
 
         return {
             "status": "success",

@@ -6,6 +6,8 @@ from core.schemas import UpscaleRequest, UpscaleResponse, UpscaleAllResponse
 from celery_app import process_image, process_all_methods, celery_app  # Добавляем celery_app
 import fastapi
 import uvicorn
+from fastapi import WebSocket, WebSocketDisconnect
+import asyncio
 
 # Настройка логирования
 logging.basicConfig(
@@ -57,6 +59,34 @@ async def upscale_all_methods(request: UpscaleRequest = Body(...)):
     task = process_all_methods.delay(request.image_base64, request.scale_factor)
     return {"task_id": task.id}
 
+@app.websocket("/ws/task/{task_id}")
+async def websocket_task_status(websocket: WebSocket, task_id: str):
+    await websocket.accept()
+    try:
+        while True:
+            task = celery_app.AsyncResult(task_id)
+            if task.state == 'SUCCESS':
+                logger.info(f"Task {task_id} is SUCCESS")
+                await websocket.send_json({"status": "SUCCESS", "result": task.result})
+                break
+            elif task.state == 'FAILURE':
+                logger.info(f"Task {task_id} is FAILURE: {str(task.result)}")
+                await websocket.send_json({"status": "FAILURE", "error": str(task.result)})
+                break
+            elif task.state == 'PROGRESS':
+                progress = task.info.get('progress', 0) if isinstance(task.info, dict) else 0
+                await websocket.send_json({"status": "PROGRESS", "progress": progress})
+            else:
+                await websocket.send_json({"status": task.state})
+            await asyncio.sleep(0.5)  # Проверяем каждые 0.5 секунды
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket disconnected for task {task_id}")
+    except Exception as e:
+        logger.error(f"WebSocket error for task {task_id}: {str(e)}")
+        await websocket.send_json({"status": "ERROR", "error": str(e)})
+    finally:
+        await websocket.close()
+
 @app.get("/task/{task_id}")
 @app.head("/task/{task_id}")
 async def get_task_status(task_id: str):
@@ -82,3 +112,7 @@ async def get_task_status(task_id: str):
     except Exception as e:
         logger.error(f"Error while checking task status for {task_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Ошибка при проверке статуса задачи: {str(e)}")
+    
+    
+    
+    

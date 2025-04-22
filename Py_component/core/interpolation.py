@@ -4,6 +4,14 @@ from scipy.interpolate import RectBivariateSpline
 import logging
 
 logger = logging.getLogger(__name__)
+# Добавим в начало файла
+def check_opencv_build():
+    print(f"OpenCV Version: {cv2.__version__}")
+    print("OpenCV Build Information:")
+    print(cv2.getBuildInformation())
+
+# Вызовем функцию один раз при запуске
+check_opencv_build()
 
 def bilinear_interpolation(image: np.ndarray, scale_factor: float) -> np.ndarray:
     """Увеличивает изображение с использованием билинейной интерполяции.

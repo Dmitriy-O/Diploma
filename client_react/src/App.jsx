@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import ImageUploader from './components/ImageUploader';
 import Controls from './components/Controls';
 import ResultCard from './components/ResultCard';
@@ -10,6 +10,7 @@ import ErrorMessage from './components/ErrorMessage';
 import useTaskPolling from './hooks/useTaskPolling';
 
 const BACKEND_URL = 'http://127.0.0.1:8000/upscale_all_methods/';
+const AVERAGE_TIMES_URL = 'http://127.0.0.1:8000/average_times/';
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const SUPPORTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
 
@@ -20,13 +21,25 @@ async function startUpscaleTask(base64Image, scaleFactor) {
         body: JSON.stringify({ image_base64: base64Image, scale_factor: scaleFactor, algorithm: "all" }),
     });
     if (!response.ok) {
-        let errorData = { detail: `Ошибка сервера: ${response.status}` };
+        let errorData = { detail: `Помилка сервера: ${response.status}` };
         try { errorData = await response.json(); } catch (e) { /* ignore */ }
-        throw new Error(errorData.detail || `Ошибка сервера: ${response.status}`);
+        throw new Error(errorData.detail || `Помилка сервера: ${response.status}`);
     }
     const result = await response.json();
-    if (!result || typeof result.task_id !== 'string') { throw new Error('Не удалось получить корректный ID задачи.'); }
+    if (!result || typeof result.task_id !== 'string') { throw new Error('Не вдалося отримати коректний ID завдання.'); }
     return result.task_id;
+}
+
+async function fetchAverageTimes() {
+    const response = await fetch(AVERAGE_TIMES_URL);
+    if (!response.ok) {
+        throw new Error('Не вдалося завантажити середні часи обробки.');
+    }
+    const data = await response.json();
+    if (data.status !== 'success') {
+        throw new Error(data.error || 'Помилка при завантаженні середніх часів.');
+    }
+    return data.average_times || {};
 }
 
 function fileToBase64(file) {
@@ -45,7 +58,10 @@ function App() {
     const [scaleFactor, setScaleFactor] = useState(2.0);
     const [taskId, setTaskId] = useState(null);
     const [modalImage, setModalImage] = useState({ src: null, alt: null });
-    const [isFileLoading, setIsFileLoading] = useState(false); // ← Новое состояние для загрузки файла
+    const [isFileLoading, setIsFileLoading] = useState(false);
+    const [sortBy, setSortBy] = useState('psnr');
+    const [averageTimes, setAverageTimes] = useState({});
+    const [averageTimesError, setAverageTimesError] = useState(null);
 
     const {
         status: pollingStatus,
@@ -57,6 +73,21 @@ function App() {
         clearError,
     } = useTaskPolling(taskId);
 
+    useEffect(() => {
+        const loadAverageTimes = async () => {
+            try {
+                const avgTimes = await fetchAverageTimes();
+                setAverageTimes(avgTimes);
+                setAverageTimesError(null);
+            } catch (err) {
+                console.error("Помилка завантаження середніх часів:", err.message);
+                setAverageTimes({});
+                setAverageTimesError('Не вдалося завантажити середні часи обробки. Спробуйте пізніше.');
+            }
+        };
+        loadAverageTimes();
+    }, []);
+
     const handleFileSelect = useCallback(async (file) => {
         console.log('handleFileSelect called with file:', file);
         clearError();
@@ -64,7 +95,7 @@ function App() {
         setSelectedFile(null);
         setOriginalImageBase64(null);
         setOriginalDimensions(null);
-        setIsFileLoading(true); // ← Используем новое состояние
+        setIsFileLoading(true);
         if (!file) {
             console.log('No file provided');
             setIsFileLoading(false);
@@ -72,13 +103,13 @@ function App() {
         }
         if (!SUPPORTED_IMAGE_TYPES.includes(file.type)) {
             console.log('Unsupported file type:', file.type);
-            setError({ message: 'Неподдерживаемый формат файла.', details: 'Выберите PNG, JPG или WEBP.' });
+            setError({ message: 'Непідтримуваний формат файлу.', details: 'Виберіть PNG, JPG або WEBP.' });
             setIsFileLoading(false);
             return;
         }
         if (file.size > MAX_FILE_SIZE) {
             console.log('File too large:', file.size);
-            setError({ message: 'Файл слишком большой.', details: `Макс. ${MAX_FILE_SIZE / 1024 / 1024}MB.` });
+            setError({ message: 'Файл занадто великий.', details: `Макс. ${MAX_FILE_SIZE / 1024 / 1024} МБ.` });
             setIsFileLoading(false);
             return;
         }
@@ -95,7 +126,7 @@ function App() {
             };
             img.onerror = () => {
                 console.error('Image load error');
-                setError({ message: 'Не удалось загрузить превью.', details: 'Файл поврежден?' });
+                setError({ message: 'Не вдалося завантажити попередній перегляд.', details: 'Файл пошкоджений?' });
                 setOriginalImageBase64(null);
                 setSelectedFile(null);
                 setIsFileLoading(false);
@@ -103,7 +134,7 @@ function App() {
             img.src = base64;
         } catch (readError) {
             console.error("File read error in handleFileSelect:", readError);
-            setError({ message: 'Не удалось прочитать файл.', details: readError.message });
+            setError({ message: 'Не вдалося прочитати файл.', details: readError.message });
             setOriginalImageBase64(null);
             setSelectedFile(null);
             setIsFileLoading(false);
@@ -119,7 +150,7 @@ function App() {
             setTaskId(newTaskId);
         } catch (apiError) {
             console.error("Upscale initiation error:", apiError);
-            setError({ message: 'Ошибка при запуске задачи.', details: apiError.message });
+            setError({ message: 'Помилка при запуску завдання.', details: apiError.message });
         }
     }, [originalImageBase64, scaleFactor, isProcessing, isFileLoading, clearError, setError]);
 
@@ -136,7 +167,7 @@ function App() {
         document.body.removeChild(link);
     }, [selectedFile, scaleFactor]);
 
-    const chartData = { psnr: { labels: [], values: [] }, ssim: { labels: [], values: [] }, bestPsnrMethod: '', bestSsimMethod: '' };
+    const chartData = { psnr: { labels: [], values: [] }, ssim: { labels: [], values: [] }, gradient: { labels: [], values: [] }, mse: { labels: [], values: [] }, time: { labels: [], values: [] }, bestPsnrMethod: '', bestSsimMethod: '' };
     if (result?.results) {
         let bestPsnr = -Infinity;
         let bestSsim = -Infinity;
@@ -144,10 +175,16 @@ function App() {
             const label = method.charAt(0).toUpperCase() + method.slice(1);
             chartData.psnr.labels.push(label);
             chartData.ssim.labels.push(label);
+            chartData.gradient.labels.push(label);
+            chartData.mse.labels.push(label);
+            chartData.time.labels.push(label);
             const currentPsnr = (data.psnr === "infinity" || data.psnr === Infinity) ? Infinity : (typeof data.psnr === 'number' ? data.psnr : -Infinity);
             const currentSsim = (typeof data.ssim === 'number') ? data.ssim : -Infinity;
             chartData.psnr.values.push(currentPsnr === Infinity ? null : currentPsnr);
             chartData.ssim.values.push(currentSsim === -Infinity ? null : currentSsim);
+            chartData.gradient.values.push(data.gradient_diff);
+            chartData.mse.values.push(data.mse);
+            chartData.time.values.push(data.processing_time);
             if (currentPsnr > bestPsnr) {
                 bestPsnr = currentPsnr;
                 chartData.bestPsnrMethod = method;
@@ -159,13 +196,24 @@ function App() {
         });
     }
 
+    const sortedResults = result?.results
+        ? Object.entries(result.results).sort(([, a], [, b]) => {
+              if (sortBy === 'psnr') return (b.psnr === "infinity" ? Infinity : b.psnr) - (a.psnr === "infinity" ? Infinity : a.psnr);
+              if (sortBy === 'ssim') return b.ssim - a.ssim;
+              if (sortBy === 'time') return a.processing_time - b.processing_time;
+              if (sortBy === 'gradient') return a.gradient_diff - b.gradient_diff;
+              if (sortBy === 'mse') return a.mse - b.mse;
+              return 0;
+          })
+        : [];
+
     return (
         <div className="min-h-screen flex items-center justify-center p-4 font-poppins text-gray-100 relative overflow-hidden bg-gray-900">
             <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-indigo-900/80 to-gray-900 animate-gradient background-size-200"></div>
             <div className="container max-w-7xl w-full bg-gray-800/90 backdrop-blur-lg rounded-3xl shadow-2xl border border-gray-700 p-6 md:p-10 relative z-10">
                 <header className="text-center mb-10">
-                    <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-teal-400 pb-1">Image Upscaler</h1>
-                    <p className="text-gray-400 mt-2 text-base sm:text-lg">Сравнение методов интерполяции</p>
+                    <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-teal-400 pb-1">Збільшувач Зображень</h1>
+                    <p className="text-gray-400 mt-2 text-base sm:text-lg">Порівняння методів інтерполяції</p>
                 </header>
                 <div className="space-y-8 md:space-y-10">
                     <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8 items-start">
@@ -181,7 +229,7 @@ function App() {
                                 scaleFactor={scaleFactor}
                                 onScaleChange={setScaleFactor}
                                 onUpscale={handleUpscale}
-                                isProcessing={isProcessing || isFileLoading} // ← Учитываем оба состояния
+                                isProcessing={isProcessing || isFileLoading}
                                 isFileSelected={!!selectedFile}
                             />
                         </div>
@@ -190,78 +238,149 @@ function App() {
                         <Loader
                             message={
                                 isFileLoading
-                                    ? 'Загрузка файла...'
+                                    ? 'Завантаження файлу...'
                                     : pollingStatus === 'PROGRESS'
-                                    ? `Обработка (${Math.round(progress)}%)...`
+                                    ? `Обробка (${Math.round(progress)}%)...`
                                     : pollingStatus === 'INITIATED'
-                                    ? 'Запуск задачи...'
-                                    : 'Обработка файла...'
+                                    ? 'Запуск завдання...'
+                                    : 'Обробка файлу...'
                             }
                             progress={pollingStatus === 'PROGRESS' ? progress : null}
                         />
                     )}
                     <ErrorMessage message={error.message} details={error.details} onClose={clearError} />
                     <section className="text-center">
-                        <h3 className="text-xl font-semibold text-gray-200 mb-4">Оригинал</h3>
+                        <h3 className="text-xl font-semibold text-gray-200 mb-4">Оригінал</h3>
                         <div className="w-full max-w-xl mx-auto h-64 sm:h-80 md:h-96 bg-gray-700/50 rounded-xl flex items-center justify-center border border-gray-600 overflow-hidden shadow-lg">
                             {originalImageBase64 ? (
                                 <img
                                     id="original-image-preview"
                                     src={originalImageBase64}
-                                    alt="Оригинал"
+                                    alt="Оригінал"
                                     className="max-h-full max-w-full object-contain cursor-pointer transition-transform hover:scale-105"
-                                    onClick={() => setModalImage({ src: originalImageBase64, alt: 'Оригинал' })}
+                                    onClick={() => setModalImage({ src: originalImageBase64, alt: 'Оригінал' })}
                                 />
                             ) : (
-                                <span id="original-placeholder" className="text-gray-500">{(isProcessing || isFileLoading) && !originalImageBase64 ? 'Загрузка...' : 'Изображение не выбрано'}</span>
+                                <span id="original-placeholder" className="text-gray-500">{(isProcessing || isFileLoading) && !originalImageBase64 ? 'Завантаження...' : 'Зображення не вибрано'}</span>
                             )}
                         </div>
                         {originalDimensions && (
                             <p id="original-dimensions" className="text-sm text-gray-400 mt-3">
-                                Размер: {originalDimensions.width} x {originalDimensions.height} px
+                                Розмір: {originalDimensions.width} x {originalDimensions.height} пікселів
                             </p>
                         )}
                     </section>
+                    {averageTimes && Object.keys(averageTimes).length > 0 ? (
+                        <section className="text-center pt-6 border-t border-gray-700">
+                            <h3 className="text-xl font-semibold text-gray-200 mb-4">Середні часи обробки</h3>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                {Object.entries(averageTimes).map(([method, stats]) => (
+                                    <div key={method} className="bg-gray-700 rounded-lg p-4">
+                                        <p className="text-gray-300 font-medium capitalize">{method}</p>
+                                        <p className="text-gray-400">Час: {stats.avg_time.toFixed(2)} сек</p>
+                                        <p className="text-gray-400">MSE: {stats.avg_mse.toFixed(2)}</p>
+                                        <p className="text-gray-500 text-sm">На основі {stats.image_count} зображень</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+                    ) : averageTimesError ? (
+                        <section className="text-center pt-6 border-t border-gray-700">
+                            <p className="text-red-400">{averageTimesError}</p>
+                        </section>
+                    ) : null}
                     {result && pollingStatus === 'SUCCESS' && result.results && (
-    <section id="results-section" className="space-y-10 md:space-y-12 animate-fade-in pt-6 border-t border-gray-700">
-        <h3 className="text-2xl md:text-3xl font-semibold text-gray-100 text-center">Результаты Сравнения</h3>
-        <div id="results-container" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
-            {Object.entries(result.results).map(([method, data]) => (
-                <ResultCard
-                    key={method}
-                    method={method}
-                    data={data}
-                    onImageClick={(src, alt) => {
-                        console.log('Setting modal image:', src, alt);
-                        setModalImage({ src, alt });
-                    }}
-                    onDownloadClick={handleDownload}
-                />
-            ))}
-        </div>
-        <MetricsTable
-            results={result.results}
-            bestPsnrMethod={chartData.bestPsnrMethod}
-            bestSsimMethod={chartData.bestSsimMethod}
-        />
-        <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
-            <MetricChart
-                title="PSNR"
-                label="PSNR (dB)"
-                data={chartData.psnr}
-                backgroundColor='rgba(99, 102, 241, 0.7)'
-                borderColor='rgba(99, 102, 241, 1)'
-            />
-            <MetricChart
-                title="SSIM"
-                label="SSIM"
-                data={chartData.ssim}
-                backgroundColor='rgba(16, 185, 129, 0.7)'
-                borderColor='rgba(16, 185, 129, 1)'
-            />
-        </div>
-    </section>
-)}
+                        <section id="results-section" className="space-y-10 md:space-y-12 animate-fade-in pt-6 border-t border-gray-700">
+                            <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+                                <h3 className="text-2xl md:text-3xl font-semibold text-gray-100">Результати Порівняння</h3>
+                                <div className="relative inline-block text-left">
+                                    <label htmlFor="sort-select" className="sr-only">Сортувати за</label>
+                                    <select
+                                        id="sort-select"
+                                        value={sortBy}
+                                        onChange={(e) => {
+                                            console.log('Sort by changed to:', e.target.value);
+                                            setSortBy(e.target.value);
+                                        }}
+                                        className="appearance-none w-full bg-gray-700 text-gray-200 border border-gray-600 rounded-lg py-2 px-4 pr-8 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all hover:bg-gray-600 cursor-pointer"
+                                    >
+                                        <option value="psnr">За PSNR (найкращий зверху)</option>
+                                        <option value="ssim">За SSIM (найкращий зверху)</option>
+                                        <option value="mse">За MSE (менший зверху)</option>
+                                        <option value="gradient">За Gradient Diff (менший зверху)</option>
+                                        <option value="time">За часом (швидший зверху)</option>
+                                    </select>
+                                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-400">
+                                        <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                                            <path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" />
+                                        </svg>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="results-container" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+                                {sortedResults.map(([method, data]) => (
+                                    <ResultCard
+                                        key={method}
+                                        method={method}
+                                        data={data}
+                                        onImageClick={(src, alt) => {
+                                            console.log('Setting modal image:', src, alt);
+                                            setModalImage({ src, alt });
+                                        }}
+                                        onDownloadClick={handleDownload}
+                                    />
+                                ))}
+                            </div>
+                            <MetricsTable
+                                results={result.results}
+                                bestPsnrMethod={chartData.bestPsnrMethod}
+                                bestSsimMethod={chartData.bestSsimMethod}
+                            />
+                            <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
+                                <MetricChart
+                                    title="PSNR"
+                                    label="PSNR (дБ)"
+                                    data={chartData.psnr}
+                                    backgroundColor='rgba(99, 102, 241, 0.7)'
+                                    borderColor='rgba(99, 102, 241, 1)'
+                                />
+                                <MetricChart
+                                    title="SSIM"
+                                    label="SSIM"
+                                    data={chartData.ssim}
+                                    backgroundColor='rgba(16, 185, 129, 0.7)'
+                                    borderColor='rgba(16, 185, 129, 1)'
+                                />
+                                <MetricChart
+                                    title="Gradient Difference"
+                                    label="Gradient Diff"
+                                    data={chartData.gradient}
+                                    backgroundColor='rgba(255, 99, 132, 0.7)'
+                                    borderColor='rgba(255, 99, 132, 1)'
+                                />
+                                <MetricChart
+                                    title="MSE"
+                                    label="MSE"
+                                    data={chartData.mse}
+                                    backgroundColor='rgba(255, 159, 64, 0.7)'
+                                    borderColor='rgba(255, 159, 64, 1)'
+                                />
+                                <MetricChart
+                                    title="Час обробки"
+                                    label="Час (сек)"
+                                    data={chartData.time}
+                                    backgroundColor='rgba(255, 206, 86, 0.7)'
+                                    borderColor='rgba(255, 206, 86, 1)'
+                                />
+                            </div>
+                        </section>
+                    )}
+                    {pollingStatus === 'FAILURE' && (
+                        <div className="text-center text-red-400">
+                            <p>Не вдалося обробити зображення.</p>
+                            <p>Спробуйте ще раз або виберіть інше зображення.</p>
+                        </div>
+                    )}
                 </div>
             </div>
             <ImageModal
@@ -280,6 +399,21 @@ function App() {
                 }
                 .animate-gradient { animation: gradient 15s ease infinite; }
                 .background-size-200 { background-size: 200% 200%; }
+                select {
+                    background: linear-gradient(145deg, #2d2d3a, #1e1e27);
+                    box-shadow: inset 2px 2px 5px rgba(0, 0, 0, 0.3), inset -2px -2px 5px rgba(255, 255, 255, 0.05);
+                    transition: all 0.3s ease;
+                }
+                select:hover {
+                    background: linear-gradient(145deg, #3a3a4a, #252531);
+                }
+                select:focus {
+                    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.3);
+                }
+                option {
+                    background: #2d2d3a;
+                    color: #d1d5db;
+                }
             `}</style>
         </div>
     );

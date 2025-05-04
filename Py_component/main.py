@@ -1,13 +1,13 @@
 import logging
-from fastapi import FastAPI, HTTPException, Body, UploadFile, File
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from core.schemas import UpscaleRequest, UpscaleResponse, UpscaleAllResponse
-from celery_app import process_image, process_all_methods, celery_app  # Добавляем celery_app
+from core.schemas import UpscaleRequest
 import fastapi
 import uvicorn
-from fastapi import WebSocket, WebSocketDisconnect
 import asyncio
+from fastapi.responses import JSONResponse
+from calculate_avg_times import calculate_avg_times
 
 # Настройка логирования
 logging.basicConfig(
@@ -40,22 +40,10 @@ async def root():
     logger.info("Root endpoint accessed")
     return {"message": "Image Upscaler Service is running"}
 
-@app.post("/upscale/", response_model=dict)
-async def upscale_image(request: UpscaleRequest = Body(...)):
-    logger.info(f"Received upscale request: algorithm={request.algorithm}, scale_factor={request.scale_factor}")
-    task = process_image.delay(request.image_base64, request.scale_factor, request.algorithm)
-    return {"task_id": task.id}
-
-@app.post("/upscale_file/", response_model=dict)
-async def upscale_image_file(file: UploadFile = File(...), scale_factor: float = 2.0, algorithm: str = "bilinear"):
-    logger.info(f"Received upscale file request: algorithm={algorithm}, scale_factor={scale_factor}")
-    image_bytes = await file.read()
-    task = process_image.delay(image_bytes.hex(), scale_factor, algorithm, is_base64=False)
-    return {"task_id": task.id}
-
 @app.post("/upscale_all_methods/", response_model=dict)
-async def upscale_all_methods(request: UpscaleRequest = Body(...)):
+async def upscale_all_methods(request: UpscaleRequest):
     logger.info(f"Received upscale_all_methods request: scale_factor={request.scale_factor}")
+    from celery_app import process_all_methods  # Імпортуємо тут, щоб уникнути циклічного імпорту
     task = process_all_methods.delay(request.image_base64, request.scale_factor)
     return {"task_id": task.id}
 
@@ -64,6 +52,7 @@ async def websocket_task_status(websocket: WebSocket, task_id: str):
     await websocket.accept()
     try:
         while True:
+            from celery_app import celery_app  # Імпортуємо тут, щоб уникнути циклічного імпорту
             task = celery_app.AsyncResult(task_id)
             if task.state == 'SUCCESS':
                 logger.info(f"Task {task_id} is SUCCESS")
@@ -87,32 +76,14 @@ async def websocket_task_status(websocket: WebSocket, task_id: str):
     finally:
         await websocket.close()
 
-@app.get("/task/{task_id}")
-@app.head("/task/{task_id}")
-async def get_task_status(task_id: str):
+@app.get("/average_times/")
+async def get_average_times():
+    """
+    Повертає середні часи обробки та середню MSE для кожного методу інтерполяції.
+    """
     try:
-        logger.info(f"Checking status for task_id: {task_id}")
-        task = celery_app.AsyncResult(task_id)
-        if not task:
-            logger.warning(f"Task {task_id} not found in Celery")
-            raise HTTPException(status_code=404, detail="Задача не найдена")
-        
-        if task.state == 'PENDING':
-            logger.info(f"Task {task_id} is PENDING")
-            return {"status": "Ожидание"}
-        elif task.state == 'SUCCESS':
-            logger.info(f"Task {task_id} is SUCCESS")
-            return {"status": "Готово", "result": task.result}
-        elif task.state == 'FAILURE':
-            logger.info(f"Task {task_id} is FAILURE: {str(task.result)}")
-            return {"status": "FAILURE", "error": str(task.result)}
-        else:
-            logger.info(f"Task {task_id} state: {task.state}")
-            return {"status": task.state}
+        avg_times = calculate_avg_times()
+        return JSONResponse(content={"status": "success", "average_times": avg_times})
     except Exception as e:
-        logger.error(f"Error while checking task status for {task_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Ошибка при проверке статуса задачи: {str(e)}")
-    
-    
-    
-    
+        logger.error(f"Помилка при підрахунку середнього часу: {str(e)}")
+        return JSONResponse(content={"status": "error", "error": str(e)}, status_code=500)

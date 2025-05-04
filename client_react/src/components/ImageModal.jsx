@@ -1,44 +1,39 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { X } from 'lucide-react';
 
-function ImageModal({ src, alt, isOpen, onClose }) {
-    useEffect(() => {
-        const handleEscape = (event) => { if (event.key === 'Escape') onClose(); };
-        if (isOpen) { document.addEventListener('keydown', handleEscape); }
-        return () => document.removeEventListener('keydown', handleEscape);
-    }, [isOpen, onClose]);
-
-    if (!isOpen) return null;
+export default function ImageModal({ isOpen, src, alt, onClose }) {
+    if (!isOpen || !src) return null;
 
     return (
         <div
-            className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-md p-4 animate-fade-in"
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
             onClick={onClose}
             role="dialog"
             aria-modal="true"
-            aria-label={alt || 'Увеличенное изображение'}
+            aria-label="Модальне вікно із зображенням"
         >
             <div
-                className="relative max-w-5xl w-auto max-h-[90vh] overflow-hidden bg-gray-800 p-2 rounded-lg shadow-2xl border border-gray-600"
+                className="relative bg-gray-800/90 rounded-2xl shadow-2xl border border-gray-700 max-w-[90vw] max-h-[90vh] flex flex-col items-center p-6"
                 onClick={(e) => e.stopPropagation()}
             >
-                <img
-                    id="modal-image"
-                    src={src}
-                    alt={alt || 'Увеличенное изображение'}
-                    className="block max-w-full max-h-[calc(90vh-4rem)] object-contain rounded"
-                />
+                <div className="flex items-center justify-center w-full h-full overflow-auto">
+                    <img
+                        src={src}
+                        alt={alt}
+                        className="max-w-full max-h-[70vh] object-contain rounded-lg"
+                        loading="lazy"
+                    />
+                </div>
+                <p className="text-gray-300 text-sm mt-4">{alt}</p>
                 <button
-                    id="modal-close"
                     onClick={onClose}
-                    className="absolute top-2 right-2 bg-gray-700/80 hover:bg-gray-600/90 text-white p-2 rounded-full shadow-lg transition-all duration-300"
-                    aria-label="Закрыть"
+                    className="mt-4 flex items-center space-x-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    aria-label="Закрити модальне вікно"
                 >
-                    <X size={20} />
+                    <X size={18} />
+                    <span>Закрити</span>
                 </button>
             </div>
         </div>
     );
 }
-
-export default ImageModal;

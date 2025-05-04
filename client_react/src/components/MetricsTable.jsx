@@ -1,43 +1,49 @@
-import React from 'react';
+export default function MetricsTable({ results, bestPsnrMethod, bestSsimMethod }) {
+    const getRowClass = (method, metric, value) => {
+        if (metric === 'psnr' && method === bestPsnrMethod) return 'text-green-400 font-semibold';
+        if (metric === 'ssim' && method === bestSsimMethod) return 'text-green-400 font-semibold';
+        if (metric === 'mse' && value === Math.min(...Object.values(results).map(r => r.mse))) return 'text-green-400 font-semibold';
+        if (metric === 'gradient_diff' && value === Math.min(...Object.values(results).map(r => r.gradient_diff))) return 'text-green-400 font-semibold';
+        if (metric === 'processing_time' && value === Math.min(...Object.values(results).map(r => r.processing_time))) return 'text-green-400 font-semibold';
+        return 'text-gray-300';
+    };
 
-function MetricsTable({ results, bestPsnrMethod, bestSsimMethod }) {
     return (
-        <div className="mt-10">
-            <h4 className="text-xl font-semibold text-gray-100 mb-4 text-center">Сравнение метрик</h4>
-            <div className="overflow-x-auto bg-gray-700/80 backdrop-blur-sm rounded-xl p-1 md:p-4 shadow-lg border border-gray-600 max-w-3xl mx-auto">
-                <table className="w-full text-sm text-left text-gray-300">
-                    <thead className="text-xs text-gray-400 uppercase bg-gray-600/50">
-                        <tr>
-                            <th scope="col" className="px-4 py-3 rounded-tl-lg">Метод</th>
-                            <th scope="col" className="px-4 py-3">PSNR (dB)</th>
-                            <th scope="col" className="px-4 py-3 rounded-tr-lg">SSIM</th>
+        <div className="overflow-x-auto">
+            <table className="w-full text-left text-gray-300">
+                <thead>
+                    <tr className="bg-gray-700">
+                        <th className="p-3">Метод</th>
+                        <th className="p-3">PSNR (дБ)</th>
+                        <th className="p-3">SSIM</th>
+                        <th className="p-3">MSE</th>
+                        <th className="p-3">Gradient Diff</th>
+                        <th className="p-3">Час (сек)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {Object.entries(results).map(([method, data]) => (
+                        <tr key={method} className="border-b border-gray-600">
+                            <td className="p-3 capitalize">{method}</td>
+                            <td className={`p-3 ${getRowClass(method, 'psnr', data.psnr)}`}>
+                                {typeof data.psnr === 'string' ? data.psnr : data.psnr.toFixed(2)}
+                            </td>
+                            <td className={`p-3 ${getRowClass(method, 'ssim', data.ssim)}`}>
+                                {data.ssim.toFixed(3)}
+                            </td>
+                            <td className={`p-3 ${getRowClass(method, 'mse', data.mse)}`}>
+                                {data.mse.toFixed(2)}
+                            </td>
+                            <td className={`p-3 ${getRowClass(method, 'gradient_diff', data.gradient_diff)}`}>
+                                {data.gradient_diff.toFixed(2)}
+                            </td>
+                            <td className={`p-3 ${getRowClass(method, 'processing_time', data.processing_time)}`}>
+                                {data.processing_time.toFixed(2)}
+                            </td>
                         </tr>
-                    </thead>
-                    <tbody>
-                        {Object.entries(results).map(([method, data], index, arr) => {
-                            const displayPsnr = (data.psnr === "infinity" || data.psnr === Infinity) ? "∞" : (typeof data.psnr === 'number' ? data.psnr.toFixed(2) : 'N/A');
-                            const displaySsim = (typeof data.ssim === 'number') ? data.ssim.toFixed(3) : 'N/A';
-                            const isBestPsnr = method === bestPsnrMethod;
-                            const isBestSsim = method === bestSsimMethod;
-                            const isLastRow = index === arr.length - 1;
-                            return (
-                                <tr
-                                    key={method}
-                                    className={`transition-colors duration-200 hover:bg-gray-600/40 ${!isLastRow ? 'border-b border-gray-600' : ''}`}
-                                >
-                                    <th scope="row" className={`px-4 py-3 font-medium whitespace-nowrap ${isLastRow ? 'rounded-bl-lg' : ''}`}>
-                                        {method.charAt(0).toUpperCase() + method.slice(1)}
-                                    </th>
-                                    <td className={`px-4 py-3 ${isBestPsnr ? 'font-bold text-indigo-300' : ''}`}>{displayPsnr}</td>
-                                    <td className={`px-4 py-3 ${isBestSsim ? 'font-bold text-teal-300' : ''} ${isLastRow ? 'rounded-br-lg' : ''}`}>{displaySsim}</td>
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
-            </div>
+                    ))}
+                </tbody>
+            </table>
         </div>
     );
 }
-
-export default MetricsTable;

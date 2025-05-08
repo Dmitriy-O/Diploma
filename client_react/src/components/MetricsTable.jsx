@@ -1,49 +1,84 @@
-export default function MetricsTable({ results, bestPsnrMethod, bestSsimMethod }) {
-    const getRowClass = (method, metric, value) => {
-        if (metric === 'psnr' && method === bestPsnrMethod) return 'text-green-400 font-semibold';
-        if (metric === 'ssim' && method === bestSsimMethod) return 'text-green-400 font-semibold';
-        if (metric === 'mse' && value === Math.min(...Object.values(results).map(r => r.mse))) return 'text-green-400 font-semibold';
-        if (metric === 'gradient_diff' && value === Math.min(...Object.values(results).map(r => r.gradient_diff))) return 'text-green-400 font-semibold';
-        if (metric === 'processing_time' && value === Math.min(...Object.values(results).map(r => r.processing_time))) return 'text-green-400 font-semibold';
-        return 'text-gray-300';
-    };
+import React from 'react';
+import PropTypes from 'prop-types';
+
+function MetricsTable({ results, bestPsnrMethod, bestSsimMethod, bestMseMethod, bestGradientMethod, bestTimeMethod }) {
+    console.log('Пропси MetricsTable:', {
+        bestPsnrMethod,
+        bestSsimMethod,
+        bestMseMethod,
+        bestGradientMethod,
+        bestTimeMethod,
+    });
 
     return (
-        <div className="overflow-x-auto">
-            <table className="w-full text-left text-gray-300">
+        <div className="overflow-x-auto mt-8">
+            <table className="w-full text-left border-collapse">
                 <thead>
                     <tr className="bg-gray-700">
-                        <th className="p-3">Метод</th>
-                        <th className="p-3">PSNR (дБ)</th>
-                        <th className="p-3">SSIM</th>
-                        <th className="p-3">MSE</th>
-                        <th className="p-3">Gradient Diff</th>
-                        <th className="p-3">Час (сек)</th>
+                        <th className="py-3 px-4 text-gray-200 font-semibold">Метод</th>
+                        <th className="py-3 px-4 text-gray-200 font-semibold">PSNR (дБ)</th>
+                        <th className="py-3 px-4 text-gray-200 font-semibold">SSIM</th>
+                        <th className="py-3 px-4 text-gray-200 font-semibold">MSE</th>
+                        <th className="py-3 px-4 text-gray-200 font-semibold">Різниця градієнтів</th>
+                        <th className="py-3 px-4 text-gray-200 font-semibold">Час (сек)</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {Object.entries(results).map(([method, data]) => (
-                        <tr key={method} className="border-b border-gray-600">
-                            <td className="p-3 capitalize">{method}</td>
-                            <td className={`p-3 ${getRowClass(method, 'psnr', data.psnr)}`}>
-                                {typeof data.psnr === 'string' ? data.psnr : data.psnr.toFixed(2)}
-                            </td>
-                            <td className={`p-3 ${getRowClass(method, 'ssim', data.ssim)}`}>
-                                {data.ssim.toFixed(3)}
-                            </td>
-                            <td className={`p-3 ${getRowClass(method, 'mse', data.mse)}`}>
-                                {data.mse.toFixed(2)}
-                            </td>
-                            <td className={`p-3 ${getRowClass(method, 'gradient_diff', data.gradient_diff)}`}>
-                                {data.gradient_diff.toFixed(2)}
-                            </td>
-                            <td className={`p-3 ${getRowClass(method, 'processing_time', data.processing_time)}`}>
-                                {data.processing_time.toFixed(2)}
-                            </td>
-                        </tr>
-                    ))}
+                    {Object.entries(results).map(([method, data]) => {
+                        const isBestPsnr = method === bestPsnrMethod;
+                        const isBestSsim = method === bestSsimMethod;
+                        const isBestMse = method === bestMseMethod;
+                        const isBestGradient = method === bestGradientMethod;
+                        const isBestTime = method === bestTimeMethod;
+
+                        console.log(`Перевірка підсвітки для ${method}:`, {
+                            isBestPsnr,
+                            isBestSsim,
+                            isBestMse,
+                            isBestGradient,
+                            isBestTime,
+                        });
+
+                        const psnrDisplay = data.psnr === "infinity" ? "∞" : parseFloat(data.psnr).toFixed(2);
+                        const ssimDisplay = parseFloat(data.ssim).toFixed(4);
+                        const mseDisplay = parseFloat(data.mse).toFixed(2);
+                        const gradientDisplay = parseFloat(data.gradient_diff).toFixed(2);
+                        const timeDisplay = parseFloat(data.processing_time).toFixed(2);
+
+                        return (
+                            <tr key={method} className="border-t border-gray-600 hover:bg-gray-600">
+                                <td className="py-3 px-4 text-gray-300">{method}</td>
+                                <td className={`py-3 px-4 ${isBestPsnr ? 'text-green-400 font-semibold' : 'text-gray-300'}`}>
+                                    {psnrDisplay}
+                                </td>
+                                <td className={`py-3 px-4 ${isBestSsim ? 'text-green-400 font-semibold' : 'text-gray-300'}`}>
+                                    {ssimDisplay}
+                                </td>
+                                <td className={`py-3 px-4 ${isBestMse ? 'text-green-400 font-semibold' : 'text-gray-300'}`}>
+                                    {mseDisplay}
+                                </td>
+                                <td className={`py-3 px-4 ${isBestGradient ? 'text-green-400 font-semibold' : 'text-gray-300'}`}>
+                                    {gradientDisplay}
+                                </td>
+                                <td className={`py-3 px-4 ${isBestTime ? 'text-green-400 font-semibold' : 'text-gray-300'}`}>
+                                    {timeDisplay}
+                                </td>
+                            </tr>
+                        );
+                    })}
                 </tbody>
             </table>
         </div>
     );
 }
+
+MetricsTable.propTypes = {
+    results: PropTypes.object.isRequired,
+    bestPsnrMethod: PropTypes.string.isRequired,
+    bestSsimMethod: PropTypes.string.isRequired,
+    bestMseMethod: PropTypes.string.isRequired,
+    bestGradientMethod: PropTypes.string.isRequired,
+    bestTimeMethod: PropTypes.string.isRequired,
+};
+
+export default MetricsTable;

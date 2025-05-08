@@ -9,10 +9,11 @@ import Loader from './components/Loader';
 import ErrorMessage from './components/ErrorMessage';
 import useTaskPolling from './hooks/useTaskPolling';
 
+// Підтримуємо лише PNG
+const SUPPORTED_IMAGE_TYPES = ['image/png'];
 const BACKEND_URL = 'http://127.0.0.1:8000/upscale_all_methods/';
 const AVERAGE_TIMES_URL = 'http://127.0.0.1:8000/average_times/';
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
-const SUPPORTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
 
 async function startUpscaleTask(base64Image, scaleFactor) {
     const response = await fetch(BACKEND_URL, {
@@ -55,6 +56,8 @@ function App() {
     const [selectedFile, setSelectedFile] = useState(null);
     const [originalImageBase64, setOriginalImageBase64] = useState(null);
     const [originalDimensions, setOriginalDimensions] = useState(null);
+    const [reducedImageBase64, setReducedImageBase64] = useState(null);
+    const [reducedDimensions, setReducedDimensions] = useState(null);
     const [scaleFactor, setScaleFactor] = useState(2.0);
     const [taskId, setTaskId] = useState(null);
     const [modalImage, setModalImage] = useState({ src: null, alt: null });
@@ -77,6 +80,7 @@ function App() {
         const loadAverageTimes = async () => {
             try {
                 const avgTimes = await fetchAverageTimes();
+                console.log('Дані з бекенду (averageTimes):', avgTimes);
                 setAverageTimes(avgTimes);
                 setAverageTimesError(null);
             } catch (err) {
@@ -88,6 +92,13 @@ function App() {
         loadAverageTimes();
     }, []);
 
+    useEffect(() => {
+        if (result?.reduced_image_base64) {
+            setReducedImageBase64(result.reduced_image_base64);
+            setReducedDimensions(result.reduced_dimensions);
+        }
+    }, [result]);
+
     const handleFileSelect = useCallback(async (file) => {
         console.log('handleFileSelect called with file:', file);
         clearError();
@@ -95,6 +106,8 @@ function App() {
         setSelectedFile(null);
         setOriginalImageBase64(null);
         setOriginalDimensions(null);
+        setReducedImageBase64(null);
+        setReducedDimensions(null);
         setIsFileLoading(true);
         if (!file) {
             console.log('No file provided');
@@ -103,7 +116,7 @@ function App() {
         }
         if (!SUPPORTED_IMAGE_TYPES.includes(file.type)) {
             console.log('Unsupported file type:', file.type);
-            setError({ message: 'Непідтримуваний формат файлу.', details: 'Виберіть PNG, JPG або WEBP.' });
+            setError({ message: 'Непідтримуваний формат файлу.', details: 'Виберіть PNG.' });
             setIsFileLoading(false);
             return;
         }
@@ -167,24 +180,40 @@ function App() {
         document.body.removeChild(link);
     }, [selectedFile, scaleFactor]);
 
-    const chartData = { psnr: { labels: [], values: [] }, ssim: { labels: [], values: [] }, gradient: { labels: [], values: [] }, mse: { labels: [], values: [] }, time: { labels: [], values: [] }, bestPsnrMethod: '', bestSsimMethod: '' };
+    const chartData = { 
+        psnr: { labels: [], values: [] }, 
+        ssim: { labels: [], values: [] }, 
+        gradient: { labels: [], values: [] }, 
+        mse: { labels: [], values: [] }, 
+        time: { labels: [], values: [] }, 
+        bestPsnrMethod: '', 
+        bestSsimMethod: '', 
+        bestMseMethod: '', 
+        bestGradientMethod: '', 
+        bestTimeMethod: '' 
+    };
     if (result?.results) {
         let bestPsnr = -Infinity;
         let bestSsim = -Infinity;
+        let bestMse = Infinity;
+        let bestGradient = Infinity;
+        let bestTime = Infinity;
         Object.entries(result.results).forEach(([method, data]) => {
-            const label = method.charAt(0).toUpperCase() + method.slice(1);
-            chartData.psnr.labels.push(label);
-            chartData.ssim.labels.push(label);
-            chartData.gradient.labels.push(label);
-            chartData.mse.labels.push(label);
-            chartData.time.labels.push(label);
+            chartData.psnr.labels.push(method);
+            chartData.ssim.labels.push(method);
+            chartData.gradient.labels.push(method);
+            chartData.mse.labels.push(method);
+            chartData.time.labels.push(method);
             const currentPsnr = (data.psnr === "infinity" || data.psnr === Infinity) ? Infinity : (typeof data.psnr === 'number' ? data.psnr : -Infinity);
             const currentSsim = (typeof data.ssim === 'number') ? data.ssim : -Infinity;
+            const currentMse = (typeof data.mse === 'number') ? data.mse : Infinity;
+            const currentGradient = (typeof data.gradient_diff === 'number') ? data.gradient_diff : Infinity;
+            const currentTime = (typeof data.processing_time === 'number') ? data.processing_time : Infinity;
             chartData.psnr.values.push(currentPsnr === Infinity ? null : currentPsnr);
             chartData.ssim.values.push(currentSsim === -Infinity ? null : currentSsim);
-            chartData.gradient.values.push(data.gradient_diff);
-            chartData.mse.values.push(data.mse);
-            chartData.time.values.push(data.processing_time);
+            chartData.gradient.values.push(currentGradient);
+            chartData.mse.values.push(currentMse);
+            chartData.time.values.push(currentTime);
             if (currentPsnr > bestPsnr) {
                 bestPsnr = currentPsnr;
                 chartData.bestPsnrMethod = method;
@@ -192,6 +221,18 @@ function App() {
             if (currentSsim > bestSsim) {
                 bestSsim = currentSsim;
                 chartData.bestSsimMethod = method;
+            }
+            if (currentMse < bestMse) {
+                bestMse = currentMse;
+                chartData.bestMseMethod = method;
+            }
+            if (currentGradient < bestGradient) {
+                bestGradient = currentGradient;
+                chartData.bestGradientMethod = method;
+            }
+            if (currentTime < bestTime) {
+                bestTime = currentTime;
+                chartData.bestTimeMethod = method;
             }
         });
     }
@@ -249,6 +290,25 @@ function App() {
                         />
                     )}
                     <ErrorMessage message={error.message} details={error.details} onClose={clearError} />
+                    {reducedImageBase64 && (
+                        <section className="text-center">
+                            <h3 className="text-xl font-semibold text-gray-200 mb-4">Зменшене зображення (Метод найближчого сусіда)</h3>
+                            <div className="w-full max-w-xl mx-auto h-64 sm:h-80 md:h-96 bg-gray-700/50 rounded-xl flex items-center justify-center border border-gray-600 overflow-hidden shadow-lg">
+                                <img
+                                    id="reduced-image-preview"
+                                    src={reducedImageBase64}
+                                    alt="Зменшене зображення"
+                                    className="max-h-full max-w-full object-contain cursor-pointer transition-transform hover:scale-105"
+                                    onClick={() => setModalImage({ src: reducedImageBase64, alt: 'Зменшене зображення' })}
+                                />
+                            </div>
+                            {reducedDimensions && (
+                                <p id="reduced-dimensions" className="text-sm text-gray-400 mt-3">
+                                    Розмір: {reducedDimensions[0]} x {reducedDimensions[1]} пікселів
+                                </p>
+                            )}
+                        </section>
+                    )}
                     <section className="text-center">
                         <h3 className="text-xl font-semibold text-gray-200 mb-4">Оригінал</h3>
                         <div className="w-full max-w-xl mx-auto h-64 sm:h-80 md:h-96 bg-gray-700/50 rounded-xl flex items-center justify-center border border-gray-600 overflow-hidden shadow-lg">
@@ -276,10 +336,10 @@ function App() {
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                 {Object.entries(averageTimes).map(([method, stats]) => (
                                     <div key={method} className="bg-gray-700 rounded-lg p-4">
-                                        <p className="text-gray-300 font-medium capitalize">{method}</p>
+                                        <p className="text-gray-300 font-medium">{method}</p>
                                         <p className="text-gray-400">Час: {stats.avg_time.toFixed(2)} сек</p>
                                         <p className="text-gray-400">MSE: {stats.avg_mse.toFixed(2)}</p>
-                                        <p className="text-gray-500 text-sm">На основі {stats.image_count} зображень</p>
+                                        <p className="text-gray-500 text-sm">Дані на основі {stats.image_count} зображень</p>
                                     </div>
                                 ))}
                             </div>
@@ -303,6 +363,7 @@ function App() {
                                             setSortBy(e.target.value);
                                         }}
                                         className="appearance-none w-full bg-gray-700 text-gray-200 border border-gray-600 rounded-lg py-2 px-4 pr-8 leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all hover:bg-gray-600 cursor-pointer"
+                                        aria-label="Сортувати результати за критерієм"
                                     >
                                         <option value="psnr">За PSNR (найкращий зверху)</option>
                                         <option value="ssim">За SSIM (найкращий зверху)</option>
@@ -322,6 +383,7 @@ function App() {
                                     <ResultCard
                                         key={method}
                                         method={method}
+                                        methodDisplay={method}
                                         data={data}
                                         onImageClick={(src, alt) => {
                                             console.log('Setting modal image:', src, alt);
@@ -335,6 +397,9 @@ function App() {
                                 results={result.results}
                                 bestPsnrMethod={chartData.bestPsnrMethod}
                                 bestSsimMethod={chartData.bestSsimMethod}
+                                bestMseMethod={chartData.bestMseMethod}
+                                bestGradientMethod={chartData.bestGradientMethod}
+                                bestTimeMethod={chartData.bestTimeMethod}
                             />
                             <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
                                 <MetricChart
@@ -352,8 +417,8 @@ function App() {
                                     borderColor='rgba(16, 185, 129, 1)'
                                 />
                                 <MetricChart
-                                    title="Gradient Difference"
-                                    label="Gradient Diff"
+                                    title="Різниця градієнтів"
+                                    label="Різниця градієнтів"
                                     data={chartData.gradient}
                                     backgroundColor='rgba(255, 99, 132, 0.7)'
                                     borderColor='rgba(255, 99, 132, 1)'

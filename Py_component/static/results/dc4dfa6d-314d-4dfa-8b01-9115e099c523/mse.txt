@@ -1,3 +1,0 @@
-bilinear: 747.99
-bicubic: 721.60
-biquadratic: 736.44

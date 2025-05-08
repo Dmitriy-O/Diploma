@@ -137,7 +137,6 @@ function ResultCard({ method, data, onImageClick, onDownloadClick }) {
                 </button>
             </div>
             <div className="text-sm text-gray-400 space-y-1 mt-auto">
-                <p>Новий розмір: {shape[0]} x {shape[1]} пікселів</p>
                 <p>
                     <span title="Peak Signal-to-Noise Ratio" className="cursor-help">PSNR:</span>{' '}
                     <span className="font-medium text-gray-200">{displayPsnr}</span> дБ |{' '}
@@ -147,7 +146,7 @@ function ResultCard({ method, data, onImageClick, onDownloadClick }) {
                 <p>
                     <span title="Mean Squared Error" className="cursor-help">MSE:</span>{' '}
                     <span className="font-medium text-gray-200">{displayMse}</span> |{' '}
-                    <span title="Gradient Difference" className="cursor-help">Grad. Diff:</span>{' '}
+                    <span title="Gradient Difference" className="cursor-help">Різн. градієнт. :</span>{' '}
                     <span className="font-medium text-gray-200">{displayGradientDiff}</span>
                 </p>
                 <p>

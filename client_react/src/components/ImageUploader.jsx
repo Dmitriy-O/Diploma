@@ -1,7 +1,8 @@
-import React, { useState, useRef } from 'react'; // ← Добавляем импорт useState и useRef
+import React, { useState, useRef } from 'react';
 import { Upload } from 'lucide-react';
 
-const SUPPORTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
+// Підтримуємо лише PNG
+const SUPPORTED_IMAGE_TYPES = ['image/png'];
 
 function ImageUploader({ onFileSelect, selectedFileName, maxFileSizeMB }) {
     const [dragOver, setDragOver] = useState(false);
@@ -75,17 +76,17 @@ function ImageUploader({ onFileSelect, selectedFileName, maxFileSizeMB }) {
                             />
                         </div>
                         <span className="text-xs text-gray-300 mt-2">
-                            Загрузка: {progress.toFixed(0)}%
+                            Завантаження: {progress.toFixed(0)}%
                         </span>
                     </div>
                 ) : (
                     <>
                         <Upload className={`h-8 w-8 mb-2 transition-colors ${dragOver ? 'text-indigo-400' : 'text-gray-400'}`} aria-hidden="true" />
                         <span className="text-sm font-medium text-gray-300">
-                            {selectedFileName || 'Перетащите или выберите файл'}
+                            {selectedFileName || 'Перетягніть або оберіть файл'}
                         </span>
                         <span className="text-xs text-gray-500">
-                            PNG, JPG, WEBP (макс. {maxFileSizeMB}MB)
+                            PNG (макс. {maxFileSizeMB}MB)
                         </span>
                     </>
                 )}

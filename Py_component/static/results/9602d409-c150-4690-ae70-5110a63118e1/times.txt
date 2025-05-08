@@ -1,3 +1,0 @@
-bilinear: 0.35
-bicubic: 0.25
-biquadratic: 0.23

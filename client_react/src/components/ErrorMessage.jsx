@@ -10,7 +10,7 @@ function ErrorMessage({ message, details, onClose }) {
             <button
                 onClick={onClose}
                 className="absolute top-2 right-2 text-red-300 hover:text-red-100 p-1 rounded-full hover:bg-red-800/50 transition-colors"
-                aria-label="Закрыть ошибку"
+                aria-label="Закрити помилку"
             >
                 <X size={20} />
             </button>

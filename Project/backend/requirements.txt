@@ -1,0 +1,19 @@
+# Web framework и сервер
+fastapi>=0.95.0
+uvicorn>=0.20.0
+
+# Celery для асинхронных задач
+celery>=5.2.7
+redis>=4.5.1  # Клиент для Redis (брокер и backend)
+
+# Обработка изображений
+opencv-python-headless>=4.7.0  # cv2
+numpy>=1.23.5
+scikit-image>=0.19.3  # для psnr и ssim
+
+# Логирование и утилиты
+pydantic>=1.10.7  # Для моделей FastAPI
+matplotlib>=3.7.1  # Для построения гистограмм
+
+# Научные вычисления (для биквадратичной интерполяции)
+scipy>=1.10.1

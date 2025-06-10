@@ -3,6 +3,7 @@ import ImageUploader from './components/ImageUploader';
 import Controls from './components/Controls';
 import ResultCard from './components/ResultCard';
 import MetricsTable from './components/MetricsTable';
+import MetricChart from './components/MetricChart';
 import ImageModal from './components/ImageModal';
 import Loader from './components/Loader';
 import ErrorMessage from './components/ErrorMessage';
